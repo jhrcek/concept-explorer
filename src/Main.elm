@@ -104,7 +104,7 @@ updateDragState ( dx, dy ) dragState =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg ({ dragState } as model) =
-    case Debug.log "msg" msg of
+    case msg of
         OnDragStart cellCoord ->
             ( { model | dragState = DirectionUndecided cellCoord ( 0, 0 ) }, Cmd.none )
 
@@ -125,7 +125,7 @@ view { dragState } =
 
 grid : DragState -> Element Msg
 grid dragState =
-    List.range 1 10
+    List.range 0 9
         |> List.map (\rowIdx -> gridRow dragState rowIdx)
         |> E.column [ Border.width 1 ]
 
@@ -144,14 +144,10 @@ gridRow dragState rowIdx =
                 Horizontal _ _ ->
                     0
 
-                Vertical (RowIdx idx) offset ->
-                    if idx == rowIdx then
-                        offset
-
-                    else
-                        0
+                Vertical (RowIdx draggedRowIdx) offset ->
+                    calculateOffset rowIdx draggedRowIdx offset
     in
-    List.range 1 10
+    List.range 0 9
         |> List.map (\colIdx -> gridCell dragState rowIdx colIdx)
         |> E.row [ E.moveDown verticalOffset ]
 
@@ -167,23 +163,46 @@ gridCell dragState rowIdx colIdx =
                 DirectionUndecided _ _ ->
                     0
 
-                Horizontal (ColIdx idx) offset ->
-                    if idx == colIdx then
-                        offset
-
-                    else
-                        0
-
                 Vertical _ _ ->
                     0
+
+                Horizontal (ColIdx draggedColIdx) offset ->
+                    calculateOffset colIdx draggedColIdx offset
     in
     el
         [ Border.width 1
-        , E.width (px 60)
-        , E.height (px 60)
+        , E.width (px cellSize)
+        , E.height (px cellSize)
         , E.centerX
         , E.alignTop
         , E.htmlAttribute <| Draggable.mouseTrigger ( RowIdx rowIdx, ColIdx colIdx ) DragMsg
         , E.moveRight horizontalOffset
         ]
         (el [ E.centerX, E.centerY ] <| text <| "(" ++ String.fromInt rowIdx ++ "," ++ String.fromInt colIdx ++ ")")
+
+
+calculateOffset : Int -> Int -> Float -> Float
+calculateOffset index draggedIndex offset =
+    if draggedIndex == index then
+        offset
+        -- dragging up (left) - rows (cols) before the dragged one will move down (right) to make room for it
+
+    else if index < draggedIndex && offset < 0 && draggedIndex + (round (offset - cellSizeFloat / 2) // cellSize) <= index then
+        cellSizeFloat
+        -- dragging down (right)- rows (cols) after the dragged one will move up (left) to make room for it
+
+    else if draggedIndex < index && 0 < offset && index <= draggedIndex + (round (offset + cellSizeFloat / 2) // cellSize) then
+        -cellSizeFloat
+
+    else
+        0
+
+
+cellSize : Int
+cellSize =
+    60
+
+
+cellSizeFloat : Float
+cellSizeFloat =
+    toFloat cellSize
