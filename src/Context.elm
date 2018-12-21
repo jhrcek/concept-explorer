@@ -1,4 +1,4 @@
-module Context exposing (Concept(..), Context(..))
+module Context exposing (Context(..))
 
 import Set exposing (Set)
 
@@ -21,16 +21,9 @@ Unrelated to context, but related to visual representation:
   - toggle object / attribute pair
 
 -}
-type Context o a
+type Context
     = Context
-        { objects : Set a
-        , attributes : Set a
-        , relation : Set ( o, a )
-        }
-
-
-type Concept o a
-    = Concept
-        { extent : Set o
-        , intent : Set a
+        { relation : Set ( Int, Int )
+        , rows : Int
+        , cols : Int
         }

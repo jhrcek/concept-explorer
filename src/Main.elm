@@ -1,11 +1,14 @@
 module Main exposing (main)
 
 import Browser
+import Context exposing (Context(..))
 import Draggable
 import Draggable.Events
-import Element as E exposing (Element, el, px, text)
+import Element as E exposing (Element, el, px, rgb, text)
 import Element.Border as Border
+import Element.Font as Font
 import Html exposing (Html)
+import Set
 
 
 main : Program () Model Msg
@@ -19,7 +22,8 @@ main =
 
 
 type alias Model =
-    { dragState : DragState
+    { context : Context
+    , dragState : DragState
     , drag : Draggable.State CellCoord
     }
 
@@ -48,13 +52,24 @@ type RowIdx
 type Msg
     = OnDragStart CellCoord
     | OnDragBy Draggable.Delta
+    | CellClicked CellCoord
     | DragMsg (Draggable.Msg CellCoord)
     | DragEnd
 
 
+testContext : Context
+testContext =
+    Context
+        { relation = Set.fromList [ ( 0, 0 ), ( 1, 0 ), ( 2, 1 ), ( 1, 2 ), ( 2, 2 ), ( 3, 0 ), ( 3, 3 ) ]
+        , rows = 3
+        , cols = 3
+        }
+
+
 init : flags -> ( Model, Cmd Msg )
 init _ =
-    ( { dragState = NotDragging
+    ( { context = testContext
+      , dragState = NotDragging
       , drag = Draggable.init
       }
     , Cmd.none
@@ -67,6 +82,7 @@ dragConfig =
         [ Draggable.Events.onDragStart OnDragStart
         , Draggable.Events.onDragBy OnDragBy
         , Draggable.Events.onDragEnd DragEnd
+        , Draggable.Events.onClick CellClicked
         ]
 
 
@@ -106,32 +122,50 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg ({ dragState } as model) =
     case msg of
         OnDragStart cellCoord ->
-            ( { model | dragState = DirectionUndecided cellCoord ( 0, 0 ) }, Cmd.none )
+            ( { model | dragState = DirectionUndecided cellCoord ( 0, 0 ) }
+            , Cmd.none
+            )
 
         OnDragBy delta ->
-            ( { model | dragState = updateDragState delta dragState }, Cmd.none )
+            ( { model | dragState = updateDragState delta dragState }
+            , Cmd.none
+            )
 
         DragMsg dragMsg ->
             Draggable.update dragConfig dragMsg model
 
+        CellClicked cellCoord ->
+            ( { model | context = toggleCell cellCoord model.context }
+            , Cmd.none
+            )
+
         DragEnd ->
-            ( { model | dragState = NotDragging }, Cmd.none )
+            let
+                swap =
+                    determineSwap model.dragState
+            in
+            ( { model
+                | dragState = NotDragging
+                , context = applySwap swap model.context
+              }
+            , Cmd.none
+            )
 
 
 view : Model -> Html Msg
-view { dragState } =
-    E.layout [] (grid dragState)
+view { context, dragState } =
+    E.layout [] (grid context dragState)
 
 
-grid : DragState -> Element Msg
-grid dragState =
-    List.range 0 9
-        |> List.map (\rowIdx -> gridRow dragState rowIdx)
+grid : Context -> DragState -> Element Msg
+grid (Context c) dragState =
+    List.range 0 c.rows
+        |> List.map (\rowIdx -> gridRow (Context c) dragState rowIdx)
         |> E.column [ Border.width 1 ]
 
 
-gridRow : DragState -> Int -> Element Msg
-gridRow dragState rowIdx =
+gridRow : Context -> DragState -> Int -> Element Msg
+gridRow (Context c) dragState rowIdx =
     let
         verticalOffset =
             case dragState of
@@ -147,13 +181,13 @@ gridRow dragState rowIdx =
                 Vertical (RowIdx draggedRowIdx) offset ->
                     calculateOffset rowIdx draggedRowIdx offset
     in
-    List.range 0 9
-        |> List.map (\colIdx -> gridCell dragState rowIdx colIdx)
+    List.range 0 c.cols
+        |> List.map (\colIdx -> gridCell (Context c) dragState rowIdx colIdx)
         |> E.row [ E.moveDown verticalOffset ]
 
 
-gridCell : DragState -> Int -> Int -> Element Msg
-gridCell dragState rowIdx colIdx =
+gridCell : Context -> DragState -> Int -> Int -> Element Msg
+gridCell (Context c) dragState rowIdx colIdx =
     let
         horizontalOffset =
             case dragState of
@@ -178,7 +212,20 @@ gridCell dragState rowIdx colIdx =
         , E.htmlAttribute <| Draggable.mouseTrigger ( RowIdx rowIdx, ColIdx colIdx ) DragMsg
         , E.moveRight horizontalOffset
         ]
-        (el [ E.centerX, E.centerY ] <| text <| "(" ++ String.fromInt rowIdx ++ "," ++ String.fromInt colIdx ++ ")")
+        (el
+            [ E.centerX
+            , E.centerY
+            , Font.color (rgb 0 0.5 0)
+            , Font.size 40
+            ]
+         <|
+            text <|
+                if Set.member ( rowIdx, colIdx ) c.relation then
+                    "✓"
+
+                else
+                    ""
+        )
 
 
 calculateOffset : Int -> Int -> Float -> Float
@@ -227,3 +274,94 @@ cellSize =
 cellSizeFloat : Float
 cellSizeFloat =
     toFloat cellSize
+
+
+{-| Represents exchange of columns / rows to be performed
+-}
+type Swap
+    = NoSwap
+    | SwapRows Int Int
+    | SwapColumns Int Int
+
+
+determineSwap : DragState -> Swap
+determineSwap dragState =
+    case dragState of
+        NotDragging ->
+            NoSwap
+
+        DirectionUndecided _ _ ->
+            NoSwap
+
+        Horizontal (ColIdx draggedIdx) offset ->
+            case getIndexOffset offset of
+                0 ->
+                    NoSwap
+
+                nonzeroIndexOffset ->
+                    SwapColumns draggedIdx (draggedIdx + nonzeroIndexOffset)
+
+        Vertical (RowIdx draggedIdx) offset ->
+            case getIndexOffset offset of
+                0 ->
+                    NoSwap
+
+                nonzeroIndexOffset ->
+                    SwapRows draggedIdx (draggedIdx + nonzeroIndexOffset)
+
+
+applySwap : Swap -> Context -> Context
+applySwap swap (Context c) =
+    case swap of
+        NoSwap ->
+            Context c
+
+        SwapRows a b ->
+            Context
+                { c
+                    | relation =
+                        c.relation
+                            |> Set.toList
+                            |> List.map (\( x, y ) -> ( swapInts a b x, y ))
+                            |> Set.fromList
+                }
+
+        SwapColumns a b ->
+            Context
+                { c
+                    | relation =
+                        c.relation
+                            |> Set.toList
+                            |> List.map (\( x, y ) -> ( x, swapInts a b y ))
+                            |> Set.fromList
+                }
+
+
+{-| put from at the place of to and shift everything between by one to fill in the empty slot
+-}
+swapInts : Int -> Int -> Int -> Int
+swapInts from to x =
+    if x == from then
+        to
+
+    else if from < x && x <= to then
+        x - 1
+
+    else if to <= x && x < from then
+        x + 1
+
+    else
+        x
+
+
+toggleCell : CellCoord -> Context -> Context
+toggleCell ( RowIdx row, ColIdx col ) (Context ctx) =
+    let
+        newRelation =
+            if Set.member ( row, col ) ctx.relation then
+                Set.remove ( row, col ) ctx.relation
+
+            else
+                Set.insert ( row, col ) ctx.relation
+    in
+    Context { ctx | relation = newRelation }
