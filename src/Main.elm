@@ -187,15 +187,36 @@ calculateOffset index draggedIndex offset =
         offset
         -- dragging up (left) - rows (cols) before the dragged one will move down (right) to make room for it
 
-    else if index < draggedIndex && offset < 0 && draggedIndex + (round (offset - cellSizeFloat / 2) // cellSize) <= index then
+    else if index < draggedIndex && offset < 0 && draggedIndex + getIndexOffset offset <= index then
         cellSizeFloat
         -- dragging down (right)- rows (cols) after the dragged one will move up (left) to make room for it
 
-    else if draggedIndex < index && 0 < offset && index <= draggedIndex + (round (offset + cellSizeFloat / 2) // cellSize) then
+    else if draggedIndex < index && 0 < offset && index <= draggedIndex + getIndexOffset offset then
         -cellSizeFloat
 
     else
         0
+
+
+{-| Convert offset in pixels, to offset expressed in number of cells.
+E.g. if I dragged -260 pixels and cell size is 100, the offset is -3 cells.
+-}
+getIndexOffset : Float -> Int
+getIndexOffset offset =
+    round (offset + signum offset * cellSizeFloat / 2) // cellSize
+
+
+signum : Float -> Float
+signum x =
+    case compare x 0 of
+        LT ->
+            -1
+
+        EQ ->
+            0
+
+        GT ->
+            1
 
 
 cellSize : Int
