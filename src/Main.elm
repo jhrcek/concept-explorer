@@ -4,7 +4,7 @@ import Browser
 import Context exposing (Context(..))
 import Draggable
 import Draggable.Events
-import Element as E exposing (Element, el, px, rgb, text)
+import Element exposing (Element)
 import Element.Border as Border
 import Element.Font as Font
 import Html exposing (Html)
@@ -154,14 +154,14 @@ update msg model =
 
 view : Model -> Html Msg
 view { context, dragState } =
-    E.layout [] (grid context dragState)
+    Element.layout [] (grid context dragState)
 
 
 grid : Context -> DragState -> Element Msg
 grid (Context c) dragState =
     List.range 0 c.rows
         |> List.map (\rowIdx -> gridRow (Context c) dragState rowIdx)
-        |> E.column [ Border.width 1 ]
+        |> Element.column [ Border.width 1 ]
 
 
 gridRow : Context -> DragState -> Int -> Element Msg
@@ -183,7 +183,7 @@ gridRow (Context c) dragState rowIdx =
     in
     List.range 0 c.cols
         |> List.map (\colIdx -> gridCell (Context c) dragState rowIdx colIdx)
-        |> E.row [ E.moveDown verticalOffset ]
+        |> Element.row [ Element.moveDown verticalOffset ]
 
 
 gridCell : Context -> DragState -> Int -> Int -> Element Msg
@@ -203,29 +203,29 @@ gridCell (Context c) dragState rowIdx colIdx =
                 Horizontal (ColIdx draggedColIdx) offset ->
                     calculateOffset colIdx draggedColIdx offset
     in
-    el
+    Element.el
         [ Border.width 1
-        , E.width (px cellSize)
-        , E.height (px cellSize)
-        , E.centerX
-        , E.alignTop
-        , E.htmlAttribute <| Draggable.mouseTrigger ( RowIdx rowIdx, ColIdx colIdx ) DragMsg
-        , E.moveRight horizontalOffset
+        , Element.width (Element.px cellSize)
+        , Element.height (Element.px cellSize)
+        , Element.centerX
+        , Element.alignTop
+        , Element.htmlAttribute <| Draggable.mouseTrigger ( RowIdx rowIdx, ColIdx colIdx ) DragMsg
+        , Element.moveRight horizontalOffset
         ]
-        (el
-            [ E.centerX
-            , E.centerY
-            , Font.color (rgb 0 0.5 0)
+    <|
+        Element.el
+            [ Element.centerX
+            , Element.centerY
+            , Font.color (Element.rgb 0 0.5 0)
             , Font.size 40
             ]
-         <|
-            text <|
+        <|
+            Element.text <|
                 if Set.member ( rowIdx, colIdx ) c.relation then
                     "✓"
 
                 else
                     ""
-        )
 
 
 calculateOffset : Int -> Int -> Float -> Float
