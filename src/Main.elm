@@ -95,7 +95,7 @@ updateDragState : Draggable.Delta -> DragState -> DragState
 updateDragState ( dx, dy ) dragState =
     case dragState of
         NotDragging ->
-            Debug.todo "Calling this method in NotDragging state means my expectation that OnDragBy would never come before OnDragStart is broken"
+            NotDragging
 
         DirectionUndecided ( rowIdx, colIdx ) ( dx0, dy0 ) ->
             let
@@ -119,7 +119,7 @@ updateDragState ( dx, dy ) dragState =
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
-update msg ({ dragState } as model) =
+update msg model =
     case msg of
         OnDragStart cellCoord ->
             ( { model | dragState = DirectionUndecided cellCoord ( 0, 0 ) }
@@ -127,7 +127,7 @@ update msg ({ dragState } as model) =
             )
 
         OnDragBy delta ->
-            ( { model | dragState = updateDragState delta dragState }
+            ( { model | dragState = updateDragState delta model.dragState }
             , Cmd.none
             )
 
@@ -318,26 +318,14 @@ applySwap swap (Context c) =
 
         SwapRows a b ->
             Context
-                { c
-                    | relation =
-                        c.relation
-                            |> Set.toList
-                            |> List.map (\( x, y ) -> ( swapInts a b x, y ))
-                            |> Set.fromList
-                }
+                { c | relation = Set.map (\( x, y ) -> ( swapInts a b x, y )) c.relation }
 
         SwapColumns a b ->
             Context
-                { c
-                    | relation =
-                        c.relation
-                            |> Set.toList
-                            |> List.map (\( x, y ) -> ( x, swapInts a b y ))
-                            |> Set.fromList
-                }
+                { c | relation = Set.map (\( x, y ) -> ( x, swapInts a b y )) c.relation }
 
 
-{-| put from at the place of to and shift everything between by one to fill in the empty slot
+{-| Put `from` at the place of `to` and shift everything between by one to fill in the empty place
 -}
 swapInts : Int -> Int -> Int -> Int
 swapInts from to x =
