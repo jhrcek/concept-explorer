@@ -5,8 +5,10 @@ import Context exposing (Context(..))
 import Draggable
 import Draggable.Events
 import Element exposing (Element)
+import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
+import Element.Input as Input
 import Html exposing (Html)
 import Set
 
@@ -55,6 +57,10 @@ type Msg
     | CellClicked CellCoord
     | DragMsg (Draggable.Msg CellCoord)
     | DragEnd
+    | AddRow
+    | AddColumn
+    | RemoveRow
+    | RemoveColumn
 
 
 testContext : Context
@@ -151,10 +157,63 @@ update msg model =
             , Cmd.none
             )
 
+        AddRow ->
+            ( { model | context = Context.addRow model.context }
+            , Cmd.none
+            )
+
+        AddColumn ->
+            ( { model | context = Context.addColumn model.context }
+            , Cmd.none
+            )
+
+        RemoveRow ->
+            ( { model | context = Context.removeRow model.context }
+            , Cmd.none
+            )
+
+        RemoveColumn ->
+            ( { model | context = Context.removeColumn model.context }
+            , Cmd.none
+            )
+
 
 view : Model -> Html Msg
 view { context, dragState } =
-    Element.layout [] (grid context dragState)
+    Element.layout [] <|
+        Element.column []
+            [ gridControls
+            , grid context dragState
+            ]
+
+
+gridControls : Element Msg
+gridControls =
+    let
+        button msg label =
+            Input.button
+                [ Element.padding 4
+                , Border.solid
+                , Border.width 2
+                , Border.color (Element.rgb255 0 0 0)
+                , Background.color (Element.rgb255 0 140 186)
+                , Border.rounded 5
+                , Font.color (Element.rgb 1 1 1)
+                , Font.size 13
+                ]
+                { onPress = Just msg
+                , label = Element.text label
+                }
+    in
+    Element.row
+        [ Element.spacing 10
+        , Element.padding 10
+        ]
+        [ button RemoveRow "- Row"
+        , button AddRow "+ Row"
+        , button RemoveColumn "- Column"
+        , button AddColumn "+ Column"
+        ]
 
 
 grid : Context -> DragState -> Element Msg

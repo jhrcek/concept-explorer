@@ -1,4 +1,10 @@
-module Context exposing (Context(..))
+module Context exposing
+    ( Context(..)
+    , addColumn
+    , addRow
+    , removeColumn
+    , removeRow
+    )
 
 import Set exposing (Set)
 
@@ -26,4 +32,32 @@ type Context
         { relation : Set ( Int, Int )
         , rows : Int
         , cols : Int
+        }
+
+
+addRow : Context -> Context
+addRow (Context c) =
+    Context { c | rows = c.rows + 1 }
+
+
+addColumn : Context -> Context
+addColumn (Context c) =
+    Context { c | cols = c.cols + 1 }
+
+
+removeRow : Context -> Context
+removeRow (Context c) =
+    Context
+        { c
+            | rows = Basics.max 0 (c.rows - 1)
+            , relation = Set.filter (\( x, _ ) -> x < c.rows) c.relation
+        }
+
+
+removeColumn : Context -> Context
+removeColumn (Context c) =
+    Context
+        { c
+            | cols = Basics.max 0 (c.cols - 1)
+            , relation = Set.filter (\( _, y ) -> y < c.cols) c.relation
         }
