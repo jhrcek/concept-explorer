@@ -18,6 +18,7 @@ module Context exposing
     , toggleCell
     )
 
+import Array exposing (Array)
 import Set exposing (Set)
 
 
@@ -44,8 +45,8 @@ type Context
         { relation : Set ( Int, Int )
 
         -- TODO this should probably be Array String, mapping row/col indices to Attribute/Object labels
-        , rows : Int
-        , cols : Int
+        , objects : Array String
+        , attributes : Array String
         }
 
 
@@ -76,30 +77,38 @@ inRelation (RowIdx rowIdx) (ColIdx colIdx) (Context c) =
 
 objectCount : Context -> Int
 objectCount (Context c) =
-    c.rows
+    Array.length c.objects
 
 
 attributeCount : Context -> Int
 attributeCount (Context c) =
-    c.cols
+    Array.length c.attributes
 
 
 addRow : Context -> Context
 addRow (Context c) =
-    Context { c | rows = c.rows + 1 }
+    let
+        objectName =
+            "Object " ++ String.fromInt (Array.length c.objects)
+    in
+    Context { c | objects = Array.push objectName c.objects }
 
 
 addColumn : Context -> Context
 addColumn (Context c) =
-    Context { c | cols = c.cols + 1 }
+    let
+        attributeName =
+            "Attribute" ++ String.fromInt (Array.length c.attributes)
+    in
+    Context { c | attributes = Array.push attributeName c.attributes }
 
 
 removeRow : Context -> Context
 removeRow (Context c) =
     Context
         { c
-            | rows = Basics.max 0 (c.rows - 1)
-            , relation = Set.filter (\( x, _ ) -> x < c.rows) c.relation
+            | objects = Array.slice 0 (Array.length c.objects - 1) c.objects
+            , relation = Set.filter (\( x, _ ) -> x < Array.length c.objects) c.relation
         }
 
 
@@ -107,8 +116,8 @@ removeColumn : Context -> Context
 removeColumn (Context c) =
     Context
         { c
-            | cols = Basics.max 0 (c.cols - 1)
-            , relation = Set.filter (\( _, y ) -> y < c.cols) c.relation
+            | attributes = Array.slice 0 (Array.length c.attributes - 1) c.attributes
+            , relation = Set.filter (\( _, y ) -> y < Array.length c.attributes) c.relation
         }
 
 
@@ -181,6 +190,6 @@ init : Context
 init =
     Context
         { relation = Set.fromList [ ( 0, 0 ), ( 1, 0 ), ( 2, 1 ), ( 1, 2 ), ( 2, 2 ), ( 3, 0 ), ( 3, 3 ) ]
-        , rows = 3
-        , cols = 3
+        , objects = Array.fromList [ "Object 0", "Object 1", "Object 2" ]
+        , attributes = Array.fromList [ "Attribute 0", "Attribute 1", "Attribute 2" ]
         }
