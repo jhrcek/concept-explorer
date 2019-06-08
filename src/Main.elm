@@ -1,7 +1,7 @@
 module Main exposing (main)
 
 import Browser
-import Context exposing (Context(..))
+import Context exposing (CellCoord, ColIdx(..), Context, RowIdx(..), Swap(..))
 import Draggable
 import Draggable.Events
 import Element exposing (Element)
@@ -10,7 +10,6 @@ import Element.Border as Border
 import Element.Font as Font
 import Element.Input as Input
 import Html exposing (Html)
-import Set
 
 
 main : Program () Model Msg
@@ -39,18 +38,6 @@ type DragState
     | Vertical RowIdx Float
 
 
-type alias CellCoord =
-    ( RowIdx, ColIdx )
-
-
-type ColIdx
-    = ColIdx Int
-
-
-type RowIdx
-    = RowIdx Int
-
-
 type Msg
     = OnDragStart CellCoord
     | OnDragBy Draggable.Delta
@@ -63,18 +50,9 @@ type Msg
     | RemoveColumn
 
 
-testContext : Context
-testContext =
-    Context
-        { relation = Set.fromList [ ( 0, 0 ), ( 1, 0 ), ( 2, 1 ), ( 1, 2 ), ( 2, 2 ), ( 3, 0 ), ( 3, 3 ) ]
-        , rows = 3
-        , cols = 3
-        }
-
-
 init : flags -> ( Model, Cmd Msg )
 init _ =
-    ( { context = testContext
+    ( { context = Context.init
       , dragState = NotDragging
       , drag = Draggable.init
       }
@@ -141,7 +119,7 @@ update msg model =
             Draggable.update dragConfig dragMsg model
 
         CellClicked cellCoord ->
-            ( { model | context = toggleCell cellCoord model.context }
+            ( { model | context = Context.toggleCell cellCoord model.context }
             , Cmd.none
             )
 
@@ -152,7 +130,7 @@ update msg model =
             in
             ( { model
                 | dragState = NotDragging
-                , context = applySwap swap model.context
+                , context = Context.applySwap swap model.context
               }
             , Cmd.none
             )
@@ -190,6 +168,7 @@ view { context, dragState } =
 gridControls : Element Msg
 gridControls =
     let
+        button : Msg -> String -> Element Msg
         button msg label =
             Input.button
                 [ Element.padding 4
@@ -217,14 +196,14 @@ gridControls =
 
 
 grid : Context -> DragState -> Element Msg
-grid (Context c) dragState =
-    List.range 0 c.rows
-        |> List.map (\rowIdx -> gridRow (Context c) dragState rowIdx)
+grid c dragState =
+    List.range 0 (Context.objectCount c)
+        |> List.map (\rowIdx -> gridRow c dragState rowIdx)
         |> Element.column [ Border.width 1 ]
 
 
 gridRow : Context -> DragState -> Int -> Element Msg
-gridRow (Context c) dragState rowIdx =
+gridRow c dragState rowIdx =
     let
         verticalOffset =
             case dragState of
@@ -240,13 +219,13 @@ gridRow (Context c) dragState rowIdx =
                 Vertical (RowIdx draggedRowIdx) offset ->
                     calculateOffset rowIdx draggedRowIdx offset
     in
-    List.range 0 c.cols
-        |> List.map (\colIdx -> gridCell (Context c) dragState rowIdx colIdx)
+    List.range 0 (Context.attributeCount c)
+        |> List.map (\colIdx -> gridCell c dragState rowIdx colIdx)
         |> Element.row [ Element.moveDown verticalOffset ]
 
 
 gridCell : Context -> DragState -> Int -> Int -> Element Msg
-gridCell (Context c) dragState rowIdx colIdx =
+gridCell context dragState rowIdx colIdx =
     let
         horizontalOffset =
             case dragState of
@@ -280,7 +259,7 @@ gridCell (Context c) dragState rowIdx colIdx =
             ]
         <|
             Element.text <|
-                if Set.member ( rowIdx, colIdx ) c.relation then
+                if Context.inRelation (RowIdx rowIdx) (ColIdx colIdx) context then
                     "✓"
 
                 else
@@ -335,14 +314,6 @@ cellSizeFloat =
     toFloat cellSize
 
 
-{-| Represents exchange of columns / rows to be performed
--}
-type Swap
-    = NoSwap
-    | SwapRows Int Int
-    | SwapColumns Int Int
-
-
 determineSwap : DragState -> Swap
 determineSwap dragState =
     case dragState of
@@ -367,48 +338,3 @@ determineSwap dragState =
 
                 nonzeroIndexOffset ->
                     SwapRows draggedIdx (draggedIdx + nonzeroIndexOffset)
-
-
-applySwap : Swap -> Context -> Context
-applySwap swap (Context c) =
-    case swap of
-        NoSwap ->
-            Context c
-
-        SwapRows a b ->
-            Context
-                { c | relation = Set.map (\( x, y ) -> ( swapInts a b x, y )) c.relation }
-
-        SwapColumns a b ->
-            Context
-                { c | relation = Set.map (\( x, y ) -> ( x, swapInts a b y )) c.relation }
-
-
-{-| Put `from` at the place of `to` and shift everything between by one to fill in the empty place
--}
-swapInts : Int -> Int -> Int -> Int
-swapInts from to x =
-    if x == from then
-        to
-
-    else if from < x && x <= to then
-        x - 1
-
-    else if to <= x && x < from then
-        x + 1
-
-    else
-        x
-
-
-toggleCell : CellCoord -> Context -> Context
-toggleCell ( RowIdx row, ColIdx col ) (Context ctx) =
-    let
-        newRelation =
-            if Set.member ( row, col ) ctx.relation then
-                Set.remove ( row, col ) ctx.relation
-
-            else
-                Set.insert ( row, col ) ctx.relation
-    in
-    Context { ctx | relation = newRelation }

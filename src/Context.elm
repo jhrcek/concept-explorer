@@ -1,9 +1,21 @@
 module Context exposing
-    ( Context(..)
+    (  CellCoord
+       -- TODO make most of these opaque
+
+    , ColIdx(..)
+    , Context
+    , RowIdx(..)
+    , Swap(..)
     , addColumn
     , addRow
+    , applySwap
+    , attributeCount
+    , inRelation
+    , init
+    , objectCount
     , removeColumn
     , removeRow
+    , toggleCell
     )
 
 import Set exposing (Set)
@@ -30,9 +42,46 @@ Unrelated to context, but related to visual representation:
 type Context
     = Context
         { relation : Set ( Int, Int )
+
+        -- TODO this should probably be Array String, mapping row/col indices to Attribute/Object labels
         , rows : Int
         , cols : Int
         }
+
+
+setAttributeName : ColIdx -> String -> Context
+setAttributeName (ColIdx colIdx) newName =
+    Debug.todo "setAttributeName"
+
+
+getAttributeName : ColIdx -> Context -> String
+getAttributeName (ColIdx colIdx) (Context c) =
+    Debug.todo "getAttributeName"
+
+
+getObjectName : RowIdx -> Context -> String
+getObjectName (RowIdx rowIdx) (Context c) =
+    Debug.todo "getObjectName"
+
+
+setObjectName : RowIdx -> String -> Context
+setObjectName (RowIdx rowIdx) newName =
+    Debug.todo "setAttributeName"
+
+
+inRelation : RowIdx -> ColIdx -> Context -> Bool
+inRelation (RowIdx rowIdx) (ColIdx colIdx) (Context c) =
+    Set.member ( rowIdx, colIdx ) c.relation
+
+
+objectCount : Context -> Int
+objectCount (Context c) =
+    c.rows
+
+
+attributeCount : Context -> Int
+attributeCount (Context c) =
+    c.cols
 
 
 addRow : Context -> Context
@@ -60,4 +109,78 @@ removeColumn (Context c) =
         { c
             | cols = Basics.max 0 (c.cols - 1)
             , relation = Set.filter (\( _, y ) -> y < c.cols) c.relation
+        }
+
+
+toggleCell : CellCoord -> Context -> Context
+toggleCell ( RowIdx row, ColIdx col ) (Context ctx) =
+    let
+        newRelation =
+            if Set.member ( row, col ) ctx.relation then
+                Set.remove ( row, col ) ctx.relation
+
+            else
+                Set.insert ( row, col ) ctx.relation
+    in
+    Context { ctx | relation = newRelation }
+
+
+applySwap : Swap -> Context -> Context
+applySwap swap (Context c) =
+    case swap of
+        NoSwap ->
+            Context c
+
+        SwapRows a b ->
+            Context
+                { c | relation = Set.map (\( x, y ) -> ( swapInts a b x, y )) c.relation }
+
+        SwapColumns a b ->
+            Context
+                { c | relation = Set.map (\( x, y ) -> ( x, swapInts a b y )) c.relation }
+
+
+{-| Put `from` at the place of `to` and shift everything between by one to fill in the empty place
+-}
+swapInts : Int -> Int -> Int -> Int
+swapInts from to x =
+    if x == from then
+        to
+
+    else if from < x && x <= to then
+        x - 1
+
+    else if to <= x && x < from then
+        x + 1
+
+    else
+        x
+
+
+type alias CellCoord =
+    ( RowIdx, ColIdx )
+
+
+type ColIdx
+    = ColIdx Int
+
+
+type RowIdx
+    = RowIdx Int
+
+
+{-| Represents exchange of columns / rows to be performed
+-}
+type Swap
+    = NoSwap
+    | SwapRows Int Int
+    | SwapColumns Int Int
+
+
+init : Context
+init =
+    Context
+        { relation = Set.fromList [ ( 0, 0 ), ( 1, 0 ), ( 2, 1 ), ( 1, 2 ), ( 2, 2 ), ( 3, 0 ), ( 3, 3 ) ]
+        , rows = 3
+        , cols = 3
         }
