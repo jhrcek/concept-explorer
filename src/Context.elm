@@ -1,7 +1,5 @@
 module Context exposing
-    (  CellCoord
-       -- TODO make most of these opaque
-
+    ( CellCoord
     , ColIdx(..)
     , Context
     , RowIdx(..)
@@ -47,8 +45,6 @@ Unrelated to context, but related to visual representation:
 type Context
     = Context
         { relation : Set ( Int, Int )
-
-        -- TODO this should probably be Array String, mapping row/col indices to Attribute/Object labels
         , objects : Array String
         , attributes : Array String
         }

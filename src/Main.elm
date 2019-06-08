@@ -4,12 +4,14 @@ import Browser
 import Context exposing (CellCoord, ColIdx(..), Context, RowIdx(..), Swap(..))
 import Draggable
 import Draggable.Events
-import Element exposing (Element)
+import Element exposing (Element, px)
 import Element.Background as Background
 import Element.Border as Border
+import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
 import Html exposing (Html)
+import Html.Events.Extra
 
 
 main : Program () Model Msg
@@ -24,8 +26,9 @@ main =
 
 type alias Model =
     { context : Context
-    , dragState : DragState
     , drag : Draggable.State CellCoord
+    , dragState : DragState
+    , nameEditState : NameEditState
     }
 
 
@@ -38,6 +41,12 @@ type DragState
     | Vertical RowIdx Float
 
 
+type NameEditState
+    = NotEditing
+    | EditingRow RowIdx String
+    | EditingColumn ColIdx String
+
+
 type Msg
     = OnDragStart CellCoord
     | OnDragBy Draggable.Delta
@@ -48,13 +57,16 @@ type Msg
     | AddColumn
     | RemoveRow
     | RemoveColumn
+    | NameEditStateChanged NameEditState
+    | ObjectNameEditConfirmed RowIdx String
 
 
 init : flags -> ( Model, Cmd Msg )
 init _ =
     ( { context = Context.init
-      , dragState = NotDragging
       , drag = Draggable.init
+      , dragState = NotDragging
+      , nameEditState = NotEditing
       }
     , Cmd.none
     )
@@ -126,7 +138,7 @@ update msg model =
         DragEnd ->
             let
                 swap =
-                    determineSwap model.dragState
+                    determineSwap model.dragState (Context.objectCount model.context) (Context.attributeCount model.context)
             in
             ( { model
                 | dragState = NotDragging
@@ -155,13 +167,26 @@ update msg model =
             , Cmd.none
             )
 
+        NameEditStateChanged newNameEditState ->
+            ( { model | nameEditState = newNameEditState }
+            , Cmd.none
+            )
+
+        ObjectNameEditConfirmed rowIdx newName ->
+            ( { model
+                | context = Context.setObjectName rowIdx newName model.context
+                , nameEditState = NotEditing
+              }
+            , Cmd.none
+            )
+
 
 view : Model -> Html Msg
-view { context, dragState } =
+view { context, dragState, nameEditState } =
     Element.layout [] <|
         Element.column []
             [ gridControls
-            , grid context dragState
+            , grid context dragState nameEditState
             ]
 
 
@@ -195,60 +220,76 @@ gridControls =
         ]
 
 
-grid : Context -> DragState -> Element Msg
-grid c dragState =
-    List.range 0 (Context.objectCount c - 1)
-        |> List.map (\rowIdx -> gridRow c dragState rowIdx)
+grid : Context -> DragState -> NameEditState -> Element Msg
+grid context dragState nameEditState =
+    List.range 0 (Context.objectCount context - 1)
+        |> List.map (\rowIdx -> gridRow context dragState nameEditState rowIdx)
         |> Element.column [ Border.width 1 ]
 
 
-gridRow : Context -> DragState -> Int -> Element Msg
-gridRow c dragState rowIdx =
+gridRow : Context -> DragState -> NameEditState -> Int -> Element Msg
+gridRow context dragState nameEditState rowIdx =
     let
-        verticalOffset =
-            case dragState of
-                NotDragging ->
-                    0
+        nameCell : Element Msg
+        nameCell =
+            let
+                label =
+                    Maybe.withDefault "" <| Context.getObjectName (RowIdx rowIdx) context
 
-                DirectionUndecided _ _ ->
-                    0
+                width =
+                    Element.width <| px 100
 
-                Horizontal _ _ ->
-                    0
+                height =
+                    Element.height <| px cellSize
 
-                Vertical (RowIdx draggedRowIdx) offset ->
-                    calculateOffset rowIdx draggedRowIdx offset
+                cellNotEdited =
+                    Element.el
+                        [ width
+                        , height
+                        , Border.width 1
+                        , Events.onDoubleClick <| NameEditStateChanged <| EditingRow (RowIdx rowIdx) label
+                        ]
+                    <|
+                        Element.el [ Element.centerY, Element.padding 10 ] <|
+                            Element.text label
+            in
+            case nameEditState of
+                EditingRow (RowIdx editedRowIdx) currentText ->
+                    if rowIdx == editedRowIdx then
+                        Input.text
+                            [ width
+                            , height
+                            , Element.htmlAttribute <| Html.Events.Extra.onEnter <| ObjectNameEditConfirmed (RowIdx editedRowIdx) currentText
+                            , Background.color (Element.rgb255 220 220 220)
+                            ]
+                            { onChange = NameEditStateChanged << EditingRow (RowIdx editedRowIdx)
+                            , text = currentText
+                            , placeholder = Nothing
+                            , label = Input.labelHidden "Object name"
+                            }
+
+                    else
+                        cellNotEdited
+
+                _ ->
+                    cellNotEdited
     in
-    List.range 0 (Context.attributeCount c - 1)
-        |> List.map (\colIdx -> gridCell c dragState rowIdx colIdx)
-        |> Element.row [ Element.moveDown verticalOffset ]
+    List.range 0 (Context.attributeCount context - 1)
+        |> List.map (\colIdx -> gridCell context dragState rowIdx colIdx)
+        |> (::) nameCell
+        |> Element.row [ Element.moveDown <| verticalOffset dragState (RowIdx rowIdx) ]
 
 
 gridCell : Context -> DragState -> Int -> Int -> Element Msg
 gridCell context dragState rowIdx colIdx =
-    let
-        horizontalOffset =
-            case dragState of
-                NotDragging ->
-                    0
-
-                DirectionUndecided _ _ ->
-                    0
-
-                Vertical _ _ ->
-                    0
-
-                Horizontal (ColIdx draggedColIdx) offset ->
-                    calculateOffset colIdx draggedColIdx offset
-    in
     Element.el
         [ Border.width 1
-        , Element.width (Element.px cellSize)
-        , Element.height (Element.px cellSize)
+        , Element.width (px cellSize)
+        , Element.height (px cellSize)
         , Element.centerX
         , Element.alignTop
         , Element.htmlAttribute <| Draggable.mouseTrigger ( RowIdx rowIdx, ColIdx colIdx ) DragMsg
-        , Element.moveRight horizontalOffset
+        , Element.moveRight <| horizontalOffset dragState (ColIdx colIdx)
         ]
     <|
         Element.el
@@ -264,6 +305,26 @@ gridCell context dragState rowIdx colIdx =
 
                 else
                     ""
+
+
+horizontalOffset : DragState -> ColIdx -> Float
+horizontalOffset dragState (ColIdx colIdx) =
+    case dragState of
+        Horizontal (ColIdx draggedColIdx) offset ->
+            calculateOffset colIdx draggedColIdx offset
+
+        _ ->
+            0
+
+
+verticalOffset : DragState -> RowIdx -> Float
+verticalOffset dragState (RowIdx rowIdx) =
+    case dragState of
+        Vertical (RowIdx draggedRowIdx) offset ->
+            calculateOffset rowIdx draggedRowIdx offset
+
+        _ ->
+            0
 
 
 calculateOffset : Int -> Int -> Float -> Float
@@ -314,8 +375,8 @@ cellSizeFloat =
     toFloat cellSize
 
 
-determineSwap : DragState -> Swap
-determineSwap dragState =
+determineSwap : DragState -> Int -> Int -> Swap
+determineSwap dragState maxRows maxCols =
     case dragState of
         NotDragging ->
             NoSwap
@@ -324,7 +385,7 @@ determineSwap dragState =
             NoSwap
 
         Horizontal (ColIdx draggedIdx) offset ->
-            case getIndexOffset offset of
+            case getIndexOffset offset |> clamp -draggedIdx (maxCols - draggedIdx - 1) of
                 0 ->
                     NoSwap
 
@@ -332,7 +393,7 @@ determineSwap dragState =
                     SwapColumns draggedIdx (draggedIdx + nonzeroIndexOffset)
 
         Vertical (RowIdx draggedIdx) offset ->
-            case getIndexOffset offset of
+            case getIndexOffset offset |> clamp -draggedIdx (maxRows - draggedIdx - 1) of
                 0 ->
                     NoSwap
 
