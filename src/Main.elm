@@ -197,7 +197,7 @@ gridControls =
 
 grid : Context -> DragState -> Element Msg
 grid c dragState =
-    List.range 0 (Context.objectCount c)
+    List.range 0 (Context.objectCount c - 1)
         |> List.map (\rowIdx -> gridRow c dragState rowIdx)
         |> Element.column [ Border.width 1 ]
 
@@ -219,7 +219,7 @@ gridRow c dragState rowIdx =
                 Vertical (RowIdx draggedRowIdx) offset ->
                     calculateOffset rowIdx draggedRowIdx offset
     in
-    List.range 0 (Context.attributeCount c)
+    List.range 0 (Context.attributeCount c - 1)
         |> List.map (\colIdx -> gridCell c dragState rowIdx colIdx)
         |> Element.row [ Element.moveDown verticalOffset ]
 

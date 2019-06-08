@@ -4,6 +4,6 @@ Experimental UI for demonstrating how [Formal Concept Analysis](https://en.wikip
 
 ## TODO
 
-- add row / column headers
+- implement a view for column / row headers
 - add way to edit row / column headers
- 
+- implement a way to rotate the context for easier editting

@@ -10,11 +10,15 @@ module Context exposing
     , addRow
     , applySwap
     , attributeCount
+    , getAttributeName
+    , getObjectName
     , inRelation
     , init
     , objectCount
     , removeColumn
     , removeRow
+    , setAttributeName
+    , setObjectName
     , toggleCell
     )
 
@@ -50,24 +54,24 @@ type Context
         }
 
 
-setAttributeName : ColIdx -> String -> Context
-setAttributeName (ColIdx colIdx) newName =
-    Debug.todo "setAttributeName"
+setAttributeName : ColIdx -> String -> Context -> Context
+setAttributeName (ColIdx colIdx) newName (Context c) =
+    Context { c | attributes = Array.set colIdx newName c.attributes }
 
 
-getAttributeName : ColIdx -> Context -> String
+setObjectName : RowIdx -> String -> Context -> Context
+setObjectName (RowIdx rowIdx) newName (Context c) =
+    Context { c | objects = Array.set rowIdx newName c.objects }
+
+
+getAttributeName : ColIdx -> Context -> Maybe String
 getAttributeName (ColIdx colIdx) (Context c) =
-    Debug.todo "getAttributeName"
+    Array.get colIdx c.attributes
 
 
-getObjectName : RowIdx -> Context -> String
+getObjectName : RowIdx -> Context -> Maybe String
 getObjectName (RowIdx rowIdx) (Context c) =
-    Debug.todo "getObjectName"
-
-
-setObjectName : RowIdx -> String -> Context
-setObjectName (RowIdx rowIdx) newName =
-    Debug.todo "setAttributeName"
+    Array.get rowIdx c.objects
 
 
 inRelation : RowIdx -> ColIdx -> Context -> Bool
@@ -98,26 +102,34 @@ addColumn : Context -> Context
 addColumn (Context c) =
     let
         attributeName =
-            "Attribute" ++ String.fromInt (Array.length c.attributes)
+            "Attribute " ++ String.fromInt (Array.length c.attributes)
     in
     Context { c | attributes = Array.push attributeName c.attributes }
 
 
 removeRow : Context -> Context
 removeRow (Context c) =
+    let
+        newHeight =
+            Array.length c.objects - 1
+    in
     Context
         { c
-            | objects = Array.slice 0 (Array.length c.objects - 1) c.objects
-            , relation = Set.filter (\( x, _ ) -> x < Array.length c.objects) c.relation
+            | objects = Array.slice 0 newHeight c.objects
+            , relation = Set.filter (\( x, _ ) -> x < newHeight) c.relation
         }
 
 
 removeColumn : Context -> Context
 removeColumn (Context c) =
+    let
+        newWidth =
+            Array.length c.attributes - 1
+    in
     Context
         { c
-            | attributes = Array.slice 0 (Array.length c.attributes - 1) c.attributes
-            , relation = Set.filter (\( _, y ) -> y < Array.length c.attributes) c.relation
+            | attributes = Array.slice 0 newWidth c.attributes
+            , relation = Set.filter (\( _, y ) -> y < newWidth) c.relation
         }
 
 
@@ -142,11 +154,17 @@ applySwap swap (Context c) =
 
         SwapRows a b ->
             Context
-                { c | relation = Set.map (\( x, y ) -> ( swapInts a b x, y )) c.relation }
+                { c
+                    | relation = Set.map (\( x, y ) -> ( swapInts a b x, y )) c.relation
+                    , objects = swapArray a b c.objects
+                }
 
         SwapColumns a b ->
             Context
-                { c | relation = Set.map (\( x, y ) -> ( x, swapInts a b y )) c.relation }
+                { c
+                    | relation = Set.map (\( x, y ) -> ( x, swapInts a b y )) c.relation
+                    , attributes = swapArray a b c.attributes
+                }
 
 
 {-| Put `from` at the place of `to` and shift everything between by one to fill in the empty place
@@ -164,6 +182,17 @@ swapInts from to x =
 
     else
         x
+
+
+{-| TODO there has to be a better way to implement this
+-}
+swapArray : Int -> Int -> Array a -> Array a
+swapArray from to =
+    Array.toIndexedList
+        >> List.map (Tuple.mapFirst (swapInts from to))
+        >> List.sortBy Tuple.first
+        >> List.map Tuple.second
+        >> Array.fromList
 
 
 type alias CellCoord =
@@ -190,6 +219,6 @@ init : Context
 init =
     Context
         { relation = Set.fromList [ ( 0, 0 ), ( 1, 0 ), ( 2, 1 ), ( 1, 2 ), ( 2, 2 ), ( 3, 0 ), ( 3, 3 ) ]
-        , objects = Array.fromList [ "Object 0", "Object 1", "Object 2" ]
-        , attributes = Array.fromList [ "Attribute 0", "Attribute 1", "Attribute 2" ]
+        , objects = Array.fromList [ "Object 0", "Object 1", "Object 2", "Object 3" ]
+        , attributes = Array.fromList [ "Attribute 0", "Attribute 1", "Attribute 2", "Attribute 3" ]
         }
