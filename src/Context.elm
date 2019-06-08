@@ -184,15 +184,11 @@ swapInts from to x =
         x
 
 
-{-| TODO there has to be a better way to implement this
--}
 swapArray : Int -> Int -> Array a -> Array a
-swapArray from to =
-    Array.toIndexedList
-        >> List.map (Tuple.mapFirst (swapInts from to))
-        >> List.sortBy Tuple.first
-        >> List.map Tuple.second
-        >> Array.fromList
+swapArray from to array =
+    Array.indexedMap
+        (\i a -> Maybe.withDefault a <| Array.get (swapInts to from i) array)
+        array
 
 
 type alias CellCoord =
