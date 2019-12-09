@@ -8,11 +8,13 @@ module Context exposing
     , addRow
     , applySwap
     , attributeCount
+    , attributeNames
     , getAttributeName
     , getObjectName
     , inRelation
     , init
     , objectCount
+    , objectNames
     , removeColumn
     , removeRow
     , setAttributeName
@@ -83,6 +85,16 @@ objectCount (Context c) =
 attributeCount : Context -> Int
 attributeCount (Context c) =
     Array.length c.attributes
+
+
+objectNames : Context -> Array String
+objectNames (Context c) =
+    c.objects
+
+
+attributeNames : Context -> Array String
+attributeNames (Context c) =
+    c.attributes
 
 
 addRow : Context -> Context

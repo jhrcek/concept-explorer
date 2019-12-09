@@ -1,5 +1,6 @@
 module Main exposing (main)
 
+import Array
 import Browser
 import Context exposing (CellCoord, ColIdx(..), Context, RowIdx(..), Swap(..))
 import Draggable
@@ -11,6 +12,7 @@ import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
 import Html exposing (Html)
+import Html.Attributes
 import Html.Events.Extra
 
 
@@ -59,6 +61,7 @@ type Msg
     | RemoveColumn
     | NameEditStateChanged NameEditState
     | ObjectNameEditConfirmed RowIdx String
+    | AttributeNameEditConfirmed ColIdx String
 
 
 init : flags -> ( Model, Cmd Msg )
@@ -180,6 +183,14 @@ update msg model =
             , Cmd.none
             )
 
+        AttributeNameEditConfirmed colIdx newName ->
+            ( { model
+                | context = Context.setAttributeName colIdx newName model.context
+                , nameEditState = NotEditing
+              }
+            , Cmd.none
+            )
+
 
 view : Model -> Html Msg
 view { context, dragState, nameEditState } =
@@ -201,7 +212,7 @@ gridControls =
                 , Border.width 2
                 , Border.color (Element.rgb255 0 0 0)
                 , Background.color (Element.rgb255 0 140 186)
-                , Border.rounded 5
+                , Border.rounded 4
                 , Font.color (Element.rgb 1 1 1)
                 , Font.size 13
                 ]
@@ -222,62 +233,132 @@ gridControls =
 
 grid : Context -> DragState -> NameEditState -> Element Msg
 grid context dragState nameEditState =
-    List.range 0 (Context.objectCount context - 1)
-        |> List.map (\rowIdx -> gridRow context dragState nameEditState rowIdx)
+    Element.column []
+        [ attributeNamesRow nameEditState dragState context
+        , Element.row []
+            [ objectNamesColumn nameEditState dragState context
+            , Element.column [ Border.width 1 ] <|
+                List.map (\rowIdx -> gridRow context dragState rowIdx) <|
+                    List.range 0 (Context.objectCount context - 1)
+            ]
+        ]
+
+
+gridRow : Context -> DragState -> Int -> Element Msg
+gridRow context dragState rowIdx =
+    List.range 0 (Context.attributeCount context - 1)
+        |> List.map (\colIdx -> gridCell context dragState rowIdx colIdx)
+        |> Element.row [ Element.moveDown <| verticalOffset dragState (RowIdx rowIdx) ]
+
+
+attributeNamesRow : NameEditState -> DragState -> Context -> Element Msg
+attributeNamesRow nameEditState dragState context =
+    Context.attributeNames context
+        |> Array.indexedMap (\rowIdx objectName -> attributeNameCell nameEditState dragState rowIdx objectName)
+        |> Array.toList
+        |> Element.column
+            [ Border.width 1
+            , Element.rotate (3 * pi / 2)
+            , Element.htmlAttribute <| Html.Attributes.style "transform-origin" "bottom right"
+            , Element.moveUp <| toFloat nameCellWidth
+            , Element.moveRight <| 2 + cellSizeFloat * toFloat (Context.attributeCount context)
+            ]
+
+
+objectNamesColumn : NameEditState -> DragState -> Context -> Element Msg
+objectNamesColumn nameEditState dragState context =
+    Context.objectNames context
+        |> Array.indexedMap (\rowIdx objectName -> objectNameCell nameEditState dragState rowIdx objectName)
+        |> Array.toList
         |> Element.column [ Border.width 1 ]
 
 
-gridRow : Context -> DragState -> NameEditState -> Int -> Element Msg
-gridRow context dragState nameEditState rowIdx =
+objectNameCell : NameEditState -> DragState -> Int -> String -> Element Msg
+objectNameCell nameEditState dragState rowIdx objectName =
     let
-        nameCell : Element Msg
-        nameCell =
-            let
-                label =
-                    Maybe.withDefault "" <| Context.getObjectName (RowIdx rowIdx) context
+        width =
+            Element.width <| px nameCellWidth
 
-                width =
-                    Element.width <| px 100
+        height =
+            Element.height <| px cellSize
 
-                height =
-                    Element.height <| px cellSize
-
-                cellNotEdited =
-                    Element.el
-                        [ width
-                        , height
-                        , Border.width 1
-                        , Events.onDoubleClick <| NameEditStateChanged <| EditingRow (RowIdx rowIdx) label
-                        ]
-                    <|
-                        Element.el [ Element.centerY, Element.padding 10 ] <|
-                            Element.text label
-            in
-            case nameEditState of
-                EditingRow (RowIdx editedRowIdx) currentText ->
-                    if rowIdx == editedRowIdx then
-                        Input.text
-                            [ width
-                            , height
-                            , Element.htmlAttribute <| Html.Events.Extra.onEnter <| ObjectNameEditConfirmed (RowIdx editedRowIdx) currentText
-                            , Background.color (Element.rgb255 220 220 220)
-                            ]
-                            { onChange = NameEditStateChanged << EditingRow (RowIdx editedRowIdx)
-                            , text = currentText
-                            , placeholder = Nothing
-                            , label = Input.labelHidden "Object name"
-                            }
-
-                    else
-                        cellNotEdited
-
-                _ ->
-                    cellNotEdited
+        cellNotEdited =
+            Element.el
+                [ width
+                , height
+                , Border.width 1
+                , Events.onDoubleClick <| NameEditStateChanged <| EditingRow (RowIdx rowIdx) objectName
+                , Element.moveDown <| verticalOffset dragState (RowIdx rowIdx)
+                ]
+            <|
+                Element.el [ Element.centerY, Element.centerX ] <|
+                    Element.text objectName
     in
-    List.range 0 (Context.attributeCount context - 1)
-        |> List.map (\colIdx -> gridCell context dragState rowIdx colIdx)
-        |> (::) nameCell
-        |> Element.row [ Element.moveDown <| verticalOffset dragState (RowIdx rowIdx) ]
+    case nameEditState of
+        EditingRow (RowIdx editedRowIdx) currentText ->
+            if rowIdx == editedRowIdx then
+                Input.text
+                    [ width
+                    , height
+                    , Element.moveDown <| verticalOffset dragState (RowIdx rowIdx)
+                    , Element.htmlAttribute <| Html.Events.Extra.onEnter <| ObjectNameEditConfirmed (RowIdx editedRowIdx) currentText
+                    , Background.color (Element.rgb255 220 220 220)
+                    ]
+                    { onChange = NameEditStateChanged << EditingRow (RowIdx editedRowIdx)
+                    , text = currentText
+                    , placeholder = Nothing
+                    , label = Input.labelHidden "Object name"
+                    }
+
+            else
+                cellNotEdited
+
+        _ ->
+            cellNotEdited
+
+
+attributeNameCell : NameEditState -> DragState -> Int -> String -> Element Msg
+attributeNameCell nameEditState dragState colIdx objectName =
+    let
+        width =
+            Element.width <| px nameCellWidth
+
+        height =
+            Element.height <| px cellSize
+
+        cellNotEdited =
+            Element.el
+                [ width
+                , height
+                , Border.width 1
+                , Events.onDoubleClick <| NameEditStateChanged <| EditingColumn (ColIdx colIdx) objectName
+                , Element.moveDown <| horizontalOffset dragState (ColIdx colIdx)
+                ]
+            <|
+                Element.el [ Element.centerY, Element.centerX ] <|
+                    Element.text objectName
+    in
+    case nameEditState of
+        EditingColumn (ColIdx editedColIdx) currentText ->
+            if colIdx == editedColIdx then
+                Input.text
+                    [ width
+                    , height
+                    , Element.moveDown <| horizontalOffset dragState (ColIdx colIdx)
+                    , Element.htmlAttribute <| Html.Events.Extra.onEnter <| AttributeNameEditConfirmed (ColIdx editedColIdx) currentText
+                    , Background.color (Element.rgb255 220 220 220)
+                    ]
+                    { onChange = NameEditStateChanged << EditingColumn (ColIdx editedColIdx)
+                    , text = currentText
+                    , placeholder = Nothing
+                    , label = Input.labelHidden "Attribute name"
+                    }
+
+            else
+                cellNotEdited
+
+        _ ->
+            cellNotEdited
 
 
 gridCell : Context -> DragState -> Int -> Int -> Element Msg
@@ -368,6 +449,11 @@ signum x =
 cellSize : Int
 cellSize =
     60
+
+
+nameCellWidth : Int
+nameCellWidth =
+    120
 
 
 cellSizeFloat : Float
